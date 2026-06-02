@@ -1,0 +1,12 @@
+# Python dependencies for running the Upstox skill examples and scripts.
+# Install with: pip install -r requirements.txt
+
+# Official Upstox Python SDK (import name: upstox_client)
+upstox-python-sdk
+
+# Used by examples for data handling and HTTP calls
+pandas
+requests
+
+# Optional: timezone handling (used with a fallback if missing)
+pytz

@@ -1,0 +1,24 @@
+# Secrets — never commit live credentials
+config.json
+.env
+*.token
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+
+# Cached instrument files
+*.json.gz
+*.csv.gz
+instruments_cache/
+
+# Local setup helper
+setup.sh
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
