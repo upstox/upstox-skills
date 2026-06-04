@@ -3,7 +3,7 @@ name: upstox
 description: >-
   Connects to a user's Upstox account through the official upstox-python-sdk to
   execute trades and pull live data from Indian exchanges (NSE, BSE, MCX). Covers
-  the full workflow: completing OAuth login, resolving tradable instruments, and
+  the full workflow: resolving tradable instruments and
   running orders through safety checks before they go live. Reach for this skill
   to place, amend, or cancel orders; inspect holdings,
   positions, available funds, or margin requirements; pull last-traded price,
@@ -34,8 +34,6 @@ most common source of bugs is mixing up the v2 and v3 API classes — read the
 
 ```bash
 pip install upstox-python-sdk
-# Optional helpers used by scripts/ and examples/: pandas, requests
-pip install pandas requests
 ```
 
 ### Credentials — environment variables only, never hardcode
@@ -120,6 +118,43 @@ or `cancel_multi_order`:
 
 ---
 
+## Rate Limits
+
+Breaching any limit returns HTTP `429 Too Many Requests` — back off before
+retrying.
+
+### Combined rate limiting for Order Placement APIs
+
+Applies across Place, Modify, Cancel, Multi Order, and GTT Order — combined.
+
+**Regular Algos** — no algo registration needed:
+
+| Time duration | Request limit |
+|---------------|---------------|
+| Per second | 10 requests |
+| Per minute | 500 requests |
+| Per 30 minutes | 2000 requests |
+
+**SEBI-Registered Algos** — algo registration needed:
+
+| Time duration | Request limit |
+|---------------|---------------|
+| Per second | 50 requests |
+| Per minute | 500 requests |
+| Per 30 minutes | 2000 requests |
+
+### Other Standard APIs
+
+Holdings, positions, funds, historical candles, etc.
+
+| Time duration | Request limit |
+|---------------|---------------|
+| Per second | 50 requests |
+| Per minute | 500 requests |
+| Per 30 minutes | 2000 requests |
+
+---
+
 ## Key Constants
 
 ```python
@@ -134,11 +169,10 @@ INTRADAY, DELIVERY, COVER, ONE_CANCELS_OTHER, MTF = "I", "D", "CO", "OCO", "MTF"
 
 # Validity
 DAY, IOC = "DAY", "IOC"
-
-# Exchanges (the `exchange` field): NSE, NFO, CDS, BSE, BFO, BCD, MCX
-# instrument_key segment prefixes:
-#   NSE_EQ, NSE_FO, NSE_INDEX, BSE_EQ, BSE_FO, BSE_INDEX, NCD_FO, BCD_FO, MCX_FO, MCX_INDEX
 ```
+
+- **Exchanges** (the `exchange` field): `NSE`, `NFO`, `CDS`, `BSE`, `BFO`, `BCD`, `MCX`
+- **`instrument_key` segment prefixes**: `NSE_EQ`, `NSE_FO`, `NSE_INDEX`, `BSE_EQ`, `BSE_FO`, `BSE_INDEX`, `NCD_FO`, `BCD_FO`, `MCX_FO`, `MCX_INDEX`
 
 ### instrument_key format
 
@@ -218,7 +252,6 @@ print(resp.data)
 
 | Topic | When to load | File |
 |-------|-------------|------|
-| OAuth login & daily token | Auth setup, token renewal | `references/auth.md` |
 | Orders (place/modify/cancel/multi/exit) | Any order operation | `references/orders.md` |
 | GTT orders (single & multi-leg) | Conditional / good-till-triggered orders | `references/gtt-orders.md` |
 | Portfolio (holdings, positions, convert, P&L) | View/manage portfolio | `references/portfolio.md` |
@@ -228,7 +261,7 @@ print(resp.data)
 | Kill switch (halt trading in a segment) | Risk control / disable a segment | `references/kill-switch.md` |
 | WebSocket (live ticks, order updates) | Streaming feeds | `references/websocket.md` |
 | Instruments (resolve names → tokens, lot size) | Symbol lookup | `references/instruments.md` |
-| Errors & rate limits | Debugging, retries, 429s | `references/errors.md` |
+| Errors (HTTP & UDAPI codes) | Debugging, error codes, 429s | `references/errors.md` |
 
 ---
 

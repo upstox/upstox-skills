@@ -1,22 +1,8 @@
-# Errors & Rate Limits Reference
+# Errors Reference
 
-## Rate Limits
-
-Upstox enforces per-second, per-minute, and per-30-minute limits that vary by
-endpoint. Breaching any of them returns HTTP `429 Too Many Requests`. Treat these
-as approximate and confirm current values in the
-[official rate-limit docs](https://upstox.com/developer/api-documentation/):
-
-| Window | Approx. limit (per endpoint) |
-|--------|------------------------------|
-| Per second | ~25–50 requests |
-| Per minute | ~250–500 requests |
-| Per 30 minutes | ~1000–2000 requests |
-
-Order placement is throttled more tightly than read endpoints — batch with
-`place_multi_order` and back off on `429`.
-
----
+Rate limits live in `SKILL.md`. Breaching any limit returns HTTP
+`429 Too Many Requests` — batch order placement with `place_multi_order` and
+back off before retrying.
 
 ## Common HTTP Error Codes
 
@@ -32,44 +18,23 @@ Order placement is throttled more tightly than read endpoints — batch with
 
 ---
 
-## Common Error Messages
+## Common API Error Codes
 
-| Error | Likely Cause | Fix |
-|-------|-------------|-----|
-| `Invalid Credentials` | OAuth params mismatch | Verify `client_id`, `redirect_uri`, `response_type` match app registration |
-| `Token Expired` | Access token > 1 day old | Re-run OAuth flow |
-| `Invalid instrument key` | Wrong token format | Use `EXCHANGE\|TOKEN` format |
-| `Order not modifiable` | Order already executed/cancelled | Check order status first |
-| `Margin insufficient` | Not enough funds | Check margin, reduce qty or add funds |
-| `Product not allowed` | Wrong product for segment | CNC only for EQ, MIS for intraday |
-| `Quantity not multiple of lot size` | F&O qty validation failed | Use multiples of lot size |
-| `Outside market hours` | Order placed when market is closed | Place during market hours |
+| Error code | Description |
+|------------|-------------|
+| `UDAPI10000` | This request is not supported by Upstox API — thrown when the API call is not recognized or valid, possibly due to incorrect URL formatting or unexpected characters in the URL. |
+| `UDAPI100016` | Invalid Credentials — thrown when one of the credentials passed to this API is invalid. |
+| `UDAPI10005` | Too Many Request Sent — thrown when you've exceeded the rate limits for the API. |
+| `UDAPI100015` | API Version does not exist — thrown when the API version isn't part of the header attributes. |
+| `UDAPI100050` | Invalid token used to access API — thrown when an invalid token is used to access the API. |
+| `UDAPI100067` | The API you are trying to access is not permitted with an extended_token — thrown when trying to access an API that is not allowed with an extended_token. |
+| `UDAPI100036` | Invalid Input — thrown when an invalid input is passed to the API. |
+| `UDAPI100038` | Invalid input passed to the API — thrown when an invalid input is passed to the API. |
+| `UDAPI100073` | Your `client_id` is inactive — thrown when the client_id is not active. Contact the support team for assistance. |
+| `UDAPI100500` | Something went wrong... please contact us — an unexpected error occurred. Contact support. |
 
----
-
-## Retry Pattern with Exponential Backoff
-
-```python
-import time, upstox_client
-from upstox_client.rest import ApiException
-
-def place_order_with_retry(order_v3, body, max_retries=3):
-    for attempt in range(max_retries):
-        try:
-            return order_v3.place_order(body)      # OrderApiV3 — no api_version
-        except ApiException as e:
-            if e.status == 429:
-                wait = 2 ** attempt  # 1s, 2s, 4s
-                print(f"Rate limited. Waiting {wait}s (attempt {attempt+1}/{max_retries})...")
-                time.sleep(wait)
-            elif e.status in (500, 503):
-                wait = 2 ** attempt
-                print(f"Server error {e.status}. Retrying in {wait}s...")
-                time.sleep(wait)
-            else:
-                raise  # Don't retry 4xx errors other than 429
-    raise RuntimeError(f"Failed after {max_retries} retries")
-```
+Error codes specific to each API are detailed in the 4XX response section within
+their respective documentation.
 
 ---
 
@@ -84,7 +49,6 @@ def api_call_with_auth_retry(api_func, *args, **kwargs):
     except ApiException as e:
         if e.status == 401:
             print("Token expired. Please regenerate your access token.")
-            print("Run: python get_token.py")
             raise SystemExit(1)
         raise
 ```

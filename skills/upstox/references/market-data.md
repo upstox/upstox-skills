@@ -79,18 +79,6 @@ for candle in resp.data.candles:
 resp = hist.get_intra_day_candle_data("NSE_EQ|INE002A01018", "minutes", "1")
 ```
 
-### Into a DataFrame
-
-```python
-import pandas as pd
-df = pd.DataFrame(resp.data.candles,
-                  columns=["ts", "open", "high", "low", "close", "volume", "oi"])
-df["ts"] = pd.to_datetime(df["ts"])
-df = df.set_index("ts").sort_index()
-df["sma20"] = df["close"].rolling(20).mean()
-print(df.tail())
-```
-
 ---
 
 ## Market status, timings & holidays — `MarketHolidaysAndTimingsApi`

@@ -45,7 +45,7 @@ npx skills add upstox/upstox-skills --skill upstox
 - Python 3.8+
 - Install dependencies:
   ```bash
-  pip install -r requirements.txt        # upstox-python-sdk, pandas, requests, pytz
+  pip install upstox-python-sdk
   ```
 - An Upstox account with an **access token** ([developer portal](https://account.upstox.com/developer/apps))
 
@@ -66,9 +66,7 @@ export UPSTOX_ACCESS_TOKEN="your-daily-token"
 ```
 The environment variable takes precedence if both are set. `config.json` is git-ignored, so your token is never committed.
 
-> **Daily token:** Upstox access tokens expire at the end of each trading day — refresh it daily.
-
-> **Generating a token:** if you don't already have one, you can mint it via the OAuth 2.0 flow, which additionally needs your API key, API secret, and redirect URI. See [`references/auth.md`](skills/upstox/references/auth.md). These three values are **only** needed for token generation — not to run the skill once you have a token.
+> **Daily token:** Upstox access tokens expire at the end of each trading day — refresh it daily. Generate one from the [Upstox developer portal](https://account.upstox.com/developer/apps).
 
 ---
 
@@ -79,7 +77,6 @@ skills/upstox/
 ├── SKILL.md                          # Entry point — setup, v2/v3 guide, safety, core patterns
 │
 ├── references/                       # Deep-dive docs loaded on demand
-│   ├── auth.md                       # OAuth 2.0 flow, daily token generation, TOTP
 │   ├── orders.md                     # Place/modify/cancel (v3), multi-order, exit
 │   ├── gtt-orders.md                 # Good-till-triggered single & multi-leg (OrderApiV3)
 │   ├── portfolio.md                  # Holdings, positions, conversion, realised P&L
@@ -89,7 +86,7 @@ skills/upstox/
 │   ├── instruments.md                # Instrument master, symbol resolution, lot sizes
 │   ├── kill-switch.md                # Halt trading in a segment (risk control)
 │   ├── websocket.md                  # MarketDataStreamerV3 + PortfolioDataStreamer
-│   └── errors.md                     # Error codes, rate limits, retry patterns
+│   └── errors.md                     # Error codes, messages, retry patterns
 │
 ├── scripts/
 │   ├── upstox_helpers.py             # get_client() factory (env / sandbox) + helpers

@@ -39,8 +39,8 @@ def _resolve_token(sandbox: bool) -> str:
     if not token or token.startswith("PASTE"):
         raise RuntimeError(
             f"No access token found. Set {env_key} (recommended) or fill "
-            f"'{cfg_key}' in config.json. Generate a token via the OAuth flow "
-            f"in references/auth.md."
+            f"'{cfg_key}' in config.json. Get a token from the Upstox "
+            f"developer portal: https://account.upstox.com/developer/apps."
         )
     return token
 
