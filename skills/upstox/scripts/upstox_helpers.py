@@ -74,6 +74,10 @@ def options_api(client=None):
     return upstox_client.OptionsApi(client or get_client())
 
 
+def instruments_api(client=None):
+    return upstox_client.InstrumentsApi(client or get_client())
+
+
 def user_api(client=None):
     return upstox_client.UserApi(client or get_client())
 

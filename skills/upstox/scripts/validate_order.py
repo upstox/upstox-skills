@@ -6,42 +6,26 @@ flags problems. It does not place anything itself.
 
 Checks:
   1. instrument_token format (SEGMENT|IDENTIFIER)
-  2. Known product code, with a segment-fit warning
-  3. F&O lot-size multiple (looked up from the live instrument master)
+  2. Known product code
+  3. F&O lot-size multiple (pass lot_size, resolved via instrument_search)
   4. LIMIT orders require price > 0; MARKET orders get a caution
-  5. Notional-value warning (> ₹50,000)
-  6. Quantity > 0
-  7. Market-hours check (suggest AMO when closed)
+  5. Quantity > 0
 """
 
 from __future__ import annotations
 
-from datetime import datetime, time as dtime
-
-try:                                   # works both as a module and run directly
-    from .resolve_instrument import load_instruments
-except ImportError:                    # pragma: no cover
-    from resolve_instrument import load_instruments
-
-# Market hours / timezone are optional niceties; degrade gracefully without pytz.
-try:
-    import pytz
-    _IST = pytz.timezone("Asia/Kolkata")
-except Exception:                      # pragma: no cover
-    _IST = None
-
-MARKET_OPEN = dtime(9, 15)
-MARKET_CLOSE = dtime(15, 30)
-NOTIONAL_WARN_THRESHOLD = 50_000
-
-KNOWN_PRODUCTS = {"I", "D", "CO", "OCO", "MTF"}
-# segment prefix -> exchange-level instrument file
-_FO_SEGMENTS = {"NSE_FO": "NSE", "BSE_FO": "BSE", "MCX_FO": "MCX", "NCD_FO": "NSE", "BCD_FO": "BSE"}
+KNOWN_PRODUCTS = {"I", "D", "MTF"}
+_FO_SEGMENTS = {"NSE_FO", "BSE_FO", "MCX_FO", "NCD_FO", "BCD_FO"}
 
 
 def validate_order(instrument_token, transaction_type, order_type, product,
-                   quantity, price, is_amo=False):
-    """Return {'valid', 'errors', 'warnings', 'order_preview'}."""
+                   quantity, price, lot_size=None):
+    """Return {'valid', 'errors', 'warnings', 'order_preview'}.
+
+    lot_size — for F&O, the instrument's lot size (resolve it via
+    instrument_search.resolve_instrument_key(...)['lot_size']). If omitted for an
+    F&O token, the multiple check is skipped with a warning.
+    """
     errors, warnings = [], []
 
     # 1. instrument_token format
@@ -53,25 +37,18 @@ def validate_order(instrument_token, transaction_type, order_type, product,
     # 2. product
     if product not in KNOWN_PRODUCTS:
         errors.append(f"Unknown product '{product}'. Valid: {sorted(KNOWN_PRODUCTS)}.")
-    if segment in _FO_SEGMENTS and product == "MTF":
-        warnings.append("MTF is not applicable to F&O — use 'I' or 'D'.")
 
     # 3. F&O lot-size multiple
     if segment in _FO_SEGMENTS:
-        try:
-            df = load_instruments(_FO_SEGMENTS[segment])
-            row = df[df["instrument_token" if "instrument_token" in df.columns
-                     else "instrument_key"] == instrument_token]
-            if not row.empty:
-                lot = int(row.iloc[0]["lot_size"])
-                if quantity % lot != 0:
-                    suggested = max(lot, round(quantity / lot) * lot)
-                    errors.append(f"Quantity {quantity} is not a multiple of lot size "
-                                  f"{lot}. Use {suggested}.")
-            else:
-                warnings.append("Could not find instrument in master to verify lot size.")
-        except Exception as e:                      # network/parse issues shouldn't block
-            warnings.append(f"Lot-size check skipped: {e}")
+        if lot_size:
+            lot = int(lot_size)
+            if quantity % lot != 0:
+                suggested = max(lot, round(quantity / lot) * lot)
+                errors.append(f"Quantity {quantity} is not a multiple of lot size "
+                              f"{lot}. Use {suggested}.")
+        else:
+            warnings.append("Lot-size check skipped: pass lot_size from "
+                            "instrument_search to verify F&O quantity multiples.")
 
     # 4. price / order type
     if order_type == "LIMIT" and price <= 0:
@@ -79,22 +56,11 @@ def validate_order(instrument_token, transaction_type, order_type, product,
     if order_type == "MARKET":
         warnings.append("MARKET order: executes at the prevailing price. Prefer LIMIT for control.")
 
-    # 5. notional
-    notional = price * quantity if price > 0 else 0
-    if notional > NOTIONAL_WARN_THRESHOLD:
-        warnings.append(f"High notional ₹{notional:,.2f} (> ₹{NOTIONAL_WARN_THRESHOLD:,}). Confirm with the user.")
-
-    # 6. quantity
+    # 5. quantity
     if quantity <= 0:
         errors.append("Quantity must be greater than 0.")
 
-    # 7. market hours
-    if _IST is not None and not is_amo:
-        now = datetime.now(_IST).time()
-        if not (MARKET_OPEN <= now <= MARKET_CLOSE):
-            warnings.append(f"Market appears closed (IST {now:%H:%M}). "
-                            f"Set is_amo=True to queue an after-market order.")
-
+    notional = price * quantity if price > 0 else 0
     preview = {
         "instrument_token": instrument_token,
         "transaction_type": transaction_type,
@@ -102,7 +68,6 @@ def validate_order(instrument_token, transaction_type, order_type, product,
         "product": product,
         "quantity": quantity,
         "price": price,
-        "is_amo": is_amo,
         "estimated_notional": f"₹{notional:,.2f}" if notional else "market price",
     }
     return _result(not errors, errors, warnings, preview)
@@ -132,5 +97,5 @@ if __name__ == "__main__":
     print_validation_result(validate_order(
         instrument_token="NSE_EQ|INE002A01018",
         transaction_type="BUY", order_type="LIMIT", product="D",
-        quantity=10, price=2500.0, is_amo=False,
+        quantity=10, price=2500.0,
     ))

@@ -43,7 +43,7 @@ Order placement is throttled more tightly than read endpoints — batch with
 | `Margin insufficient` | Not enough funds | Check margin, reduce qty or add funds |
 | `Product not allowed` | Wrong product for segment | CNC only for EQ, MIS for intraday |
 | `Quantity not multiple of lot size` | F&O qty validation failed | Use multiples of lot size |
-| `Outside market hours` | Placing non-AMO order after hours | Set `is_amo=True` |
+| `Outside market hours` | Order placed when market is closed | Place during market hours |
 
 ---
 

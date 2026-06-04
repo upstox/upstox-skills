@@ -1,10 +1,9 @@
 # Instruments Reference
 
-> Verified against the live instrument files. There are **no per-segment files**
-> like `NSE_EQ.json.gz` — Upstox publishes **per-exchange** files (`NSE`, `BSE`,
-> `MCX`) plus `complete`. Filter by the `segment` column. Columns are
-> `trading_symbol`, `strike_price`, `instrument_type` (CE/PE/FUT/EQ/INDEX),
-> and `expiry` is **epoch milliseconds**, not a date string.
+> Resolve instruments with the **server-side Instrument Search API** — do **not**
+> download the gzipped master files. The search endpoint returns the same fields
+> on demand and supports ATM-relative option lookup.
+> Docs: https://upstox.com/developer/api-documentation/instrument-search
 
 ## instrument_key format
 
@@ -17,77 +16,84 @@ SEGMENT|IDENTIFIER
 ```
 
 Always use `instrument_key` (unique, persistent) in API calls — not `exchange_token`.
+**Resolve it via the search API before every order; never hardcode or guess
+option/futures tokens — they change per expiry.**
 
 ---
 
-## Instrument master files (daily, gzipped JSON)
+## Instrument Search API — `InstrumentsApi.search_instrument`
 
+`GET /v2/instruments/search` (bearer auth). Free-text search over symbol, name,
+strike, or ISIN; no master-file download.
+
+```python
+import upstox_client
+
+instruments = upstox_client.InstrumentsApi(client)
+
+# Free-text search (symbol, name, ISIN, strike)
+res = instruments.search_instrument("Reliance", exchanges="NSE", segments="EQ")
+for inst in res.data:                       # res.data is a list of dicts
+    print(inst["trading_symbol"], inst["instrument_key"], inst.get("lot_size"))
+
+# ATM-relative option lookup — the ATM call for next week's Nifty expiry
+atm_call = instruments.search_instrument(
+    "Nifty 50", exchanges="NSE", segments="FO",
+    instrument_types="CE", expiry="next_week", atm_offset=0,
+).data[0]
+# atm_offset=+1 → one strike OTM (call), -1 → one strike below, etc.
 ```
-https://assets.upstox.com/market-quote/instruments/exchange/complete.json.gz   # everything
-https://assets.upstox.com/market-quote/instruments/exchange/NSE.json.gz        # all NSE segments
-https://assets.upstox.com/market-quote/instruments/exchange/BSE.json.gz
-https://assets.upstox.com/market-quote/instruments/exchange/MCX.json.gz
+
+| Param | Values |
+|-------|--------|
+| `query` | Free text, ≤ 50 chars: symbol, name, strike, or ISIN (required) |
+| `exchanges` | `ALL`, `NSE`, `BSE`, `MCX` (default `ALL`) |
+| `segments` | `ALL`, `EQ`, `FO`, `CURR`, `COMM`, `INDEX`, `OPT`, `FUT` |
+| `instrument_types` | `CE`, `PE`, `FUT`, `A`, `X` (comma-separated) |
+| `expiry` | `current_week`, `next_week`, `next_month`, `far_month`, or `yyyy-MM-dd` |
+| `atm_offset` | `0` = ATM, `+n` above, `-n` below the ATM strike |
+| `page_number` | ≥ 1 (default 1) · `records` 1–30 per page (default 10) |
+
+Each result includes `name`, `trading_symbol`, `instrument_key`, `exchange`,
+`segment`, `instrument_type`, `lot_size`, `tick_size`, `freeze_quantity`,
+`qty_multiplier`; F&O adds `expiry`, `strike_price`, `underlying_symbol`,
+`weekly`; equity adds `isin`, `short_name`, `security_type`.
+
+Response envelope:
+
+```json
+{ "status": "success",
+  "data": [ { "instrument_key": "...", "trading_symbol": "...", "lot_size": 1, ... } ],
+  "meta_data": { "page": { "page_number": 1, "total_pages": 1, "records": 10, "total_records": 1 } } }
 ```
-
-Other files: `mf-instruments.json.gz`, `MTF.json.gz`, `suspended-instrument.json.gz`.
-(CSV equivalents exist with `.csv.gz` but JSON is recommended.)
-
-### Columns (verified from NSE.json.gz)
-
-`segment` (e.g. `NSE_EQ`, `NSE_FO`, `NSE_INDEX`, `NCD_FO`), `exchange` (`NSE`),
-`name`, `trading_symbol`, `instrument_key`, `exchange_token`, `isin` (equity),
-`instrument_type` (`EQ`/`CE`/`PE`/`FUT`/`INDEX`/...), `strike_price`, `expiry`
-(epoch ms), `lot_size`, `tick_size`, `freeze_quantity`, `qty_multiplier`,
-`asset_symbol`, `underlying_symbol`, `minimum_lot`, `weekly`.
 
 ---
 
-## Load & search
+## `scripts/instrument_search.py`
+
+Wraps the endpoint with convenience helpers and a CLI (uses `get_client()` for
+auth). No downloads, no caching of master files.
 
 ```python
-import requests, gzip, io, pandas as pd
+from scripts.instrument_search import (
+    search, search_equity, find_option, resolve_instrument_key, get_lot_size)
 
-EXCH_URL = "https://assets.upstox.com/market-quote/instruments/exchange/{}.json.gz"
+# Single best match for an order (returns the full dict)
+inst = resolve_instrument_key("Reliance", exchanges="NSE", segments="EQ")
+token, lot = inst["instrument_key"], inst.get("lot_size")
 
-def load_instruments(exchange="NSE"):     # exchange ∈ NSE, BSE, MCX, complete
-    raw = requests.get(EXCH_URL.format(exchange), timeout=60).content
-    return pd.read_json(io.BytesIO(gzip.decompress(raw)))
+# ATM-relative option in one call
+opt = find_option("Nifty 50", expiry="next_week", option_type="CE", atm_offset=0)
 
-df = load_instruments("NSE")
-
-# Equity by name/symbol — filter the NSE_EQ segment
-eq = df[df["segment"] == "NSE_EQ"]
-hits = eq[eq["name"].str.contains("Reliance", case=False, na=False) |
-          eq["trading_symbol"].str.contains("RELIANCE", case=False, na=False)]
-print(hits[["instrument_key", "trading_symbol", "name", "isin"]].head())
+# F&O lot size for an underlying
+lot = get_lot_size("Nifty 50")
 ```
 
-### F&O options for an underlying + expiry
+CLI:
 
-`expiry` is epoch ms — convert the target date to compare:
-
-```python
-import pandas as pd
-
-def find_options(df, underlying="NIFTY", expiry="2025-01-30", option_type="CE"):
-    expiry_ms = int(pd.Timestamp(expiry, tz="Asia/Kolkata").timestamp() * 1000)
-    fo = df[df["segment"] == "NSE_FO"]
-    mask = (fo["asset_symbol"].str.upper() == underlying.upper()) & \
-           (fo["instrument_type"] == option_type) & \
-           (fo["expiry"].between(expiry_ms, expiry_ms + 86_400_000 - 1))
-    return fo[mask].sort_values("strike_price")[
-        ["instrument_key", "trading_symbol", "strike_price", "lot_size"]]
+```bash
+python scripts/instrument_search.py "Reliance" --segments EQ
+python scripts/instrument_search.py "Nifty 50" --segments FO --type CE --expiry next_week --atm 0
+python scripts/instrument_search.py --resolve "Reliance"      # prints the instrument_key
+python scripts/instrument_search.py --lot-size "Nifty 50"
 ```
-
-### Lot size for an F&O underlying
-
-```python
-def lot_size(df, underlying="NIFTY"):
-    fo = df[(df["segment"] == "NSE_FO") &
-            (df["asset_symbol"].str.upper() == underlying.upper())]
-    if fo.empty:
-        raise ValueError(f"No F&O instruments for {underlying}")
-    return int(fo.iloc[0]["lot_size"])
-```
-
-> `scripts/resolve_instrument.py` wraps these helpers with caching and a CLI.

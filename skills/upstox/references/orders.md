@@ -32,10 +32,10 @@ order_v2 = upstox_client.OrderApi(client)     # multi-order, order book, trades,
 | `transaction_type` | str | ✅ | `BUY` or `SELL` |
 | `trigger_price` | float | ✅ | For `SL`/`SL-M`; `0` otherwise |
 | `disclosed_quantity` | int | ✅ | `0` if none |
-| `is_amo` | bool | ✅ | After-market order |
+| `is_amo` | bool | ✅ | Must be set (not `None`). `False` for normal orders; `True` only for after-market orders |
 | `tag` | str | ❌ | Your label (≤ 40 chars) |
-| `slice` | bool | ❌ | Auto-slice large orders into freeze-limit chunks |
-| `market_protection` | int | ❌ | Default `0` |
+| `slice` | bool | ❌ | Auto-slice large orders into freeze-limit chunks. Optional for single `PlaceOrderV3Request`, but **required** (`False`/`True`) for `MultiOrderRequest` — see [Multiple Orders](#multiple-orders--ordermultiorderbody-v2-no-api_version) |
+| `market_protection` | int | ❌ | Market Price Protection cap (%) — see below. Default `0` |
 
 ### Limit buy
 
@@ -76,6 +76,31 @@ resp = order_v3.place_order(body)
 
 ---
 
+## Market Price Protection (MPP)
+
+MARKET orders never execute "at any price" on Upstox. Upstox **automatically**
+converts protected market orders into a limit order bounded by a buffer around
+the prevailing price (roughly 0.5%–25% depending on the instrument), so a thin
+or fast-moving book can't fill you at a wild price. This applies automatically to
+market orders on stock options, commodity options, and multi-position square-offs
+— no field required.
+
+To set your own buffer, pass `market_protection` (a percentage) on the order:
+
+```python
+body = upstox_client.PlaceOrderV3Request(
+    quantity=5, product="I", validity="DAY", price=0, tag="protected",
+    instrument_token="NSE_FO|43919", order_type="MARKET",
+    transaction_type="BUY", disclosed_quantity=0, trigger_price=0.0, is_amo=False,
+    market_protection=5,    # cap fills within 5% of the market price
+)
+resp = order_v3.place_order(body)
+```
+
+`market_protection=0` (default) leaves Upstox's automatic protection in place.
+
+---
+
 ## Modify Order — `OrderApiV3.modify_order(body)`
 
 `body` is a `ModifyOrderRequest` (there is **no** `ModifyOrderV3Request`).
@@ -108,19 +133,27 @@ print(resp.data.order_id)
 
 `body` is a list of `MultiOrderRequest`. Each needs a unique `correlation_id`.
 
+> ⚠️ **`slice` is required here.** Unlike `PlaceOrderV3Request` (where `slice` is
+> optional), the `MultiOrderRequest` model raises
+> `ValueError: Invalid value for 'slice', must not be 'None'` if you omit it.
+> Pass `slice=False` for normal orders, or `slice=True` to auto-split a large
+> order into freeze-limit chunks.
+
 ```python
 orders = [
     upstox_client.MultiOrderRequest(
         quantity=1, product="D", validity="DAY", price=2500.0, tag="basket",
+        slice=False,
         instrument_token="NSE_EQ|INE002A01018", order_type="LIMIT",
         transaction_type="BUY", disclosed_quantity=0, trigger_price=0.0,
-        is_amo=False, correlation_id="reliance-1",
+        correlation_id="reliance-1",
     ),
     upstox_client.MultiOrderRequest(
         quantity=1, product="D", validity="DAY", price=1600.0, tag="basket",
+        slice=False,
         instrument_token="NSE_EQ|INE040A01034", order_type="LIMIT",
         transaction_type="BUY", disclosed_quantity=0, trigger_price=0.0,
-        is_amo=False, correlation_id="hdfcbank-1",
+        correlation_id="hdfcbank-1",
     ),
 ]
 resp = order_v2.place_multi_order(orders)
@@ -175,11 +208,3 @@ otrades = order_v2.get_trades_by_order(order_id="250121010502101", api_version="
 | `cancelled` | Cancelled by user/system |
 | `rejected` | Rejected — read `status_message` |
 | `trigger pending` | SL/GTT trigger not yet hit |
-| `after market order req received` | AMO accepted |
-
----
-
-## AMO (After-Market Orders)
-
-Set `is_amo=True` to queue orders outside market hours (collected after ~3:45 PM
-and sent at the next pre-open). Use `validity="DAY"`.

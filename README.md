@@ -1,11 +1,26 @@
-# Upstox Agent Skills
+# Upstox Agent Skill
 
-**Upstox-native agent skill for NSE/BSE equities, F&O, and MCX commodity trading.**
 
-Give your AI agent the ability to place live orders, read portfolio data, stream market feeds, and access the full Indian market universe — all through the [Upstox Developer API v2](https://upstox.com/developer/api-documentation/).
+A native agent skill for interacting with NSE/BSE equities, F&O, and MCX commodities via the [Upstox Developer API](https://upstox.com/developer/api-documentation/).
 
-Built for the [Agent Skills open standard](https://agentskills.io) and compatible with **Claude Code**, **Codex**, and any agent that supports SKILL.md.
 
+This integration allows AI agents to execute trades, stream market data, and manage portfolios using the [Agent Skills](https://agentskills.io) open standard.
+
+### Features
+
+- **Order Execution** – Place, modify, and manage live orders across segments.
+- **Market Feeds** – Stream low-latency market data and live order books.
+- **Portfolio Access** – Read account balances, current holdings, and open positions.
+
+---
+
+### Compatibility
+
+Built to comply with the `SKILL.md` specification, providing compatibility with:
+
+- **Claude Code**
+- **Codex**
+- Any agent framework supporting the SKILL standard.
 ---
 
 ## Installation
@@ -28,15 +43,32 @@ npx skills add upstox/upstox-skills --skill upstox
 ## Requirements
 
 - Python 3.8+
-- `pip install upstox-python-sdk pandas requests pytz`
-- An Upstox developer account with API key + secret ([developer portal](https://account.upstox.com/developer/apps))
-- Credentials via environment variables:
+- Install dependencies:
   ```bash
-  export UPSTOX_ACCESS_TOKEN="your-daily-token"
-  export UPSTOX_API_KEY="your-api-key"          # for token generation
-  export UPSTOX_API_SECRET="your-api-secret"    # for token generation
-  export UPSTOX_REDIRECT_URI="your-redirect"    # for token generation
+  pip install -r requirements.txt        # upstox-python-sdk, pandas, requests, pytz
   ```
+- An Upstox account with an **access token** ([developer portal](https://account.upstox.com/developer/apps))
+
+### Authentication
+
+The skill only needs an **access token** to run. Provide it one of two ways:
+
+**1. Environment variable (recommended)**
+```bash
+export UPSTOX_ACCESS_TOKEN="your-daily-token"
+```
+
+**2. Config file** — copy `skills/upstox/config.json.example` to `skills/upstox/config.json` and fill in `access_token`:
+```json
+{
+  "access_token": "your-daily-token"
+}
+```
+The environment variable takes precedence if both are set. `config.json` is git-ignored, so your token is never committed.
+
+> **Daily token:** Upstox access tokens expire at the end of each trading day — refresh it daily.
+
+> **Generating a token:** if you don't already have one, you can mint it via the OAuth 2.0 flow, which additionally needs your API key, API secret, and redirect URI. See [`references/auth.md`](skills/upstox/references/auth.md). These three values are **only** needed for token generation — not to run the skill once you have a token.
 
 ---
 
@@ -48,19 +80,20 @@ skills/upstox/
 │
 ├── references/                       # Deep-dive docs loaded on demand
 │   ├── auth.md                       # OAuth 2.0 flow, daily token generation, TOTP
-│   ├── orders.md                     # Place/modify/cancel (v3), multi-order, exit, AMO
+│   ├── orders.md                     # Place/modify/cancel (v3), multi-order, exit
 │   ├── gtt-orders.md                 # Good-till-triggered single & multi-leg (OrderApiV3)
 │   ├── portfolio.md                  # Holdings, positions, conversion, realised P&L
 │   ├── market-data.md                # LTP/OHLC/quotes (v3), historical candles, status
 │   ├── option-chain.md               # Put-call chain, Greeks, PCR, max pain
 │   ├── margins.md                    # Funds, required margin, brokerage charges
 │   ├── instruments.md                # Instrument master, symbol resolution, lot sizes
+│   ├── kill-switch.md                # Halt trading in a segment (risk control)
 │   ├── websocket.md                  # MarketDataStreamerV3 + PortfolioDataStreamer
 │   └── errors.md                     # Error codes, rate limits, retry patterns
 │
 ├── scripts/
 │   ├── upstox_helpers.py             # get_client() factory (env / sandbox) + helpers
-│   ├── resolve_instrument.py         # Human name → instrument_key resolver
+│   ├── instrument_search.py          # Name → instrument_key via the Search API
 │   └── validate_order.py             # Pre-flight order validation with guardrails
 │
 └── examples/
@@ -68,7 +101,12 @@ skills/upstox/
     ├── place_gtt_order.py             # Single-leg GTT trigger order
     ├── portfolio_summary.py           # Holdings + positions + funds dashboard
     ├── historical_candles.py          # v3 historical candles + quick stats
-    └── option_chain_analysis.py       # ATM options, PCR, max pain for Nifty
+    ├── option_chain_analysis.py       # ATM options, PCR, max pain for Nifty
+    ├── market_quote.py                # Full market quotes (OHLC + depth + OI)
+    ├── instrument_search.py           # Search API: free-text + ATM-relative options
+    ├── bull_call_spread.py            # Bullish option strategy (2 legs)
+    ├── bear_butterfly.py              # Bearish put-butterfly strategy (3 legs)
+    └── short_strangle.py              # Neutral short-strangle strategy (2 legs)
 ```
 
 > **Accuracy note:** every SDK class, method, request model, field, enum, and
@@ -80,44 +118,48 @@ skills/upstox/
 
 ## Built-In Safety Guardrails
 
-| Rule | What it does |
+| Safeguard | How it protects you |
 |------|-------------|
-| **Confirmation required** | Shows full order preview; requires explicit `yes` before placing |
-| **Default to LIMIT** | Never places MARKET orders unless user explicitly requests |
-| **Default to 1 unit** | Uses 1 share / 1 lot when quantity not specified |
-| **Lot size validation** | Rejects F&O orders where quantity isn't a lot-size multiple |
-| **Notional value warning** | Warns when order value exceeds ₹50,000 |
-| **Product-segment guard** | Validates CNC/MIS/CO against exchange segment |
-| **Market hours check** | Warns if market is closed, suggests AMO |
-| **No hardcoded secrets** | Always uses environment variables |
+| **Always asks first** | Shows you a complete order summary and waits for your explicit `yes` before anything is placed |
+| **Plays it safe with pricing** | Places limit orders by default — it won't fire off a market order unless you specifically ask for one |
+| **Starts small** | Defaults to just 1 share (or 1 lot) when you don't say how many, so nothing is over-ordered by mistake |
+| **Catches bad F&O quantities** | Blocks futures & options orders unless the quantity is a valid multiple of the contract's lot size |
+| **Shields market orders** | Even if you ask for a market order, Upstox's Market Price Protection keeps the fill within a safe price band — and you can tighten that band yourself with `market_protection` |
+| **Lets you pull the plug** | Built-in kill-switch support so you can instantly halt all trading in a segment (cancels pending orders and blocks new ones) when you need to step away |
+| **Keeps your credentials safe** | Never hardcodes your access token — it's read from an environment variable or a git-ignored `config.json` |
 
 ---
 
 ## Example Prompts
 
 **Orders**
-- "Buy 5 shares of TCS at 3900"
-- "Place an intraday sell for HDFC Bank at market"
-- "Set a GTT to buy Infosys if it drops to 1400"
-- "Cancel my pending Reliance order"
-- "Exit all my F&O positions"
+- "Buy 10 SBIN at 820"
+- "Sell ITC at market, intraday"
+- "Place a GTT to buy Wipro when it falls to 440"
+- "Cancel order 240XXXXXX123"
+- "Square off all my F&O positions"
 
 **Portfolio**
-- "Show my holdings and P&L"
-- "List my open positions"
-- "What's my available margin?"
-- "Convert my INFY intraday position to delivery"
+- "What am I holding right now?"
+- "Show my open positions"
+- "How much cash do I have free?"
+- "Move my ITC intraday position to delivery"
 
 **Market Data**
-- "Get 30-minute candles for TCS for the past week"
-- "What's the current price of Bank Nifty?"
-- "Show the full market depth for Reliance"
+- "Last price of Bank Nifty"
+- "Daily candles for SBIN this month"
+- "Show the order book depth for Tata Motors"
 
 **Options**
-- "Show the Nifty 50 option chain for this Thursday's expiry"
-- "What's the PCR for Bank Nifty?"
-- "Find the ATM options for Nifty"
-- "Calculate max pain for Nifty"
+- "Pull the Nifty option chain for this week's expiry"
+- "Put-call ratio for Bank Nifty"
+- "Which Nifty strike is closest to spot?"
+- "Where's max pain on Nifty?"
+
+**Option strategies**
+- "Build a bull call spread on Nifty"
+- "Put on a short strangle on Bank Nifty"
+- "Set up a bear put butterfly on Nifty"
 
 ---
 

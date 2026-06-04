@@ -1,13 +1,17 @@
 ---
 name: upstox
 description: >-
-  Trade and analyze Indian markets (NSE/BSE/MCX) via the Upstox API using the
-  official upstox-python-sdk. Use when the user mentions Upstox; places, modifies,
-  or cancels orders; sets GTT orders; checks holdings, positions, funds, or margins;
-  fetches LTP/OHLC/quotes, historical candles, or option chains and greeks; reviews
-  P&L; or streams live market/portfolio data. Handles OAuth login, instrument
-  resolution, and order safety guardrails. Triggers on "Upstox", "Upstox API",
-  "upstox order", "upstox portfolio", and Indian trading terms (NSE, BSE, MCX, F&O).
+  Connects to a user's Upstox account through the official upstox-python-sdk to
+  execute trades and pull live data from Indian exchanges (NSE, BSE, MCX). Covers
+  the full workflow: completing OAuth login, resolving tradable instruments, and
+  running orders through safety checks before they go live. Reach for this skill
+  to place, amend, or cancel orders; inspect holdings,
+  positions, available funds, or margin requirements; pull last-traded price,
+  OHLC, full quotes, historical candles, or option chains with greeks; calculate
+  realised and unrealised P&L; or open a websocket feed for live market and
+  portfolio updates. Relevant whenever a request involves Upstox, the Upstox API,
+  Upstox orders or portfolios, or Indian equity, derivatives, and F&O trading on
+  NSE, BSE, or MCX.
 ---
 
 # Upstox Agent Skill
@@ -37,10 +41,8 @@ pip install pandas requests
 ### Credentials — environment variables only, never hardcode
 
 ```bash
-export UPSTOX_ACCESS_TOKEN="your-daily-access-token"   # required for all calls
-export UPSTOX_API_KEY="your-api-key"                   # only for token generation
-export UPSTOX_API_SECRET="your-api-secret"             # only for token generation
-export UPSTOX_REDIRECT_URI="https://your-app/callback" # only for token generation
+export UPSTOX_ACCESS_TOKEN="your-daily-access-token"
+export UPSTOX_SANDBOX_ACCESS_TOKEN="your-sandbox-access-token"
 ```
 
 ### Initialize the client
@@ -111,9 +113,8 @@ or `cancel_multi_order`:
 | **Default order type: LIMIT** | Never place a MARKET order unless the user explicitly asks for "market". |
 | **Default quantity** | 1 share (equity) or 1 lot (F&O) when quantity is unspecified — never guess larger. |
 | **Lot-size validation** | Reject F&O orders whose quantity is not a multiple of the instrument's `lot_size`. |
-| **Notional warning** | Warn when `price × quantity` exceeds ₹50,000 and ask the user to confirm. |
-| **Product validity** | `D`/`I` for equity; `I`/`MTF` (and `D` for some) on F&O; GTT supports only `I`, `D`, `MTF`. |
-| **Market-hours check** | If the market is closed and the order is not AMO, warn and suggest `is_amo=True`. |
+| **Market Price Protection** | MARKET orders are auto-bounded by Upstox MPP; pass `market_protection` (%) to set your own price buffer so a market order can't fill at a wild price. See `references/orders.md`. |
+| **Kill switch** | A user can halt all trading in a segment via `UserApi.update_kill_switch([{segment, action}])` — `DISABLE` cancels pending orders and blocks new ones. Warn about the ~12-hour re-enable lock before disabling. See `references/kill-switch.md`. |
 | **Sandbox first** | Rehearse in sandbox (`Configuration(sandbox=True)`) when the user is testing. |
 | **No hardcoded secrets** | Always read tokens from `os.environ`. |
 
@@ -148,8 +149,16 @@ SEGMENT|IDENTIFIER
 "NSE_FO|43919"            # F&O (→ numeric exchange token)
 ```
 
-Resolve human names to `instrument_key` with `scripts/resolve_instrument.py`. Do not
-guess option/futures tokens — they change per expiry.
+Resolve human names to `instrument_key` with `scripts/instrument_search.py` (the
+server-side Instrument Search API — no master-file downloads). **Always resolve
+the `instrument_key` this way before placing an order**; do not guess
+option/futures tokens — they change per expiry.
+
+```python
+from scripts.instrument_search import resolve_instrument_key
+inst = resolve_instrument_key("Reliance", exchanges="NSE", segments="EQ")
+instrument_token = inst["instrument_key"]   # pass inst["lot_size"] to validate_order for F&O
+```
 
 ---
 
@@ -176,7 +185,7 @@ body = upstox_client.PlaceOrderV3Request(
     transaction_type="BUY",
     disclosed_quantity=0,
     trigger_price=0.0,
-    is_amo=False,
+    is_amo=False,                             # required; True only for after-market orders
 )
 
 try:
@@ -216,6 +225,7 @@ print(resp.data)
 | Market data (LTP, OHLC, quotes, candles, status) | Prices & historical data | `references/market-data.md` |
 | Option chain (greeks, OI, PCR, max pain) | Options analysis | `references/option-chain.md` |
 | Margins, funds & brokerage charges | Pre-trade margin/charge checks | `references/margins.md` |
+| Kill switch (halt trading in a segment) | Risk control / disable a segment | `references/kill-switch.md` |
 | WebSocket (live ticks, order updates) | Streaming feeds | `references/websocket.md` |
 | Instruments (resolve names → tokens, lot size) | Symbol lookup | `references/instruments.md` |
 | Errors & rate limits | Debugging, retries, 429s | `references/errors.md` |
@@ -224,11 +234,11 @@ print(resp.data)
 
 ## Example Prompts This Skill Handles
 
-- "Buy 5 shares of TCS at 3900 on Upstox" · "Place an intraday market sell for HDFC Bank"
-- "Set a GTT to buy Infosys if it crosses 1600" · "Cancel my pending Reliance order" · "Exit all positions"
-- "Show my holdings and P&L" · "What's my available margin?" · "Convert my INFY intraday position to delivery"
-- "Get 5-minute candles for TCS for the past week" · "What's the LTP of Nifty 50?" · "Full depth for Reliance"
-- "Show the Nifty option chain for the nearest expiry" · "What's the Bank Nifty PCR?" · "Find ATM Nifty options"
+- "Buy 10 SBIN at 820"
+- "Place a GTT to buy Wipro when it falls to 440"
+- "How much cash do I have free?"
+- "Last price of Bank Nifty"
+- "Pull the Nifty option chain for this week" 
 
 ---
 
