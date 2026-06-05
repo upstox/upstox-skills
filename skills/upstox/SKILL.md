@@ -172,7 +172,7 @@ DAY, IOC = "DAY", "IOC"
 ```
 
 - **Exchanges** (the `exchange` field): `NSE`, `NFO`, `CDS`, `BSE`, `BFO`, `BCD`, `MCX`
-- **`instrument_key` segment prefixes**: `NSE_EQ`, `NSE_FO`, `NSE_INDEX`, `BSE_EQ`, `BSE_FO`, `BSE_INDEX`, `NCD_FO`, `BCD_FO`, `MCX_FO`, `MCX_INDEX`
+- **`instrument_key` segment prefixes**: `NSE_EQ`, `NSE_FO`, `NSE_INDEX`, `BSE_EQ`, `BSE_FO`, `BSE_INDEX`, `NCD_FO`, `BCD_FO`, `MCX_FO`
 
 ### instrument_key format
 
