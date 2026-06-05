@@ -271,7 +271,7 @@ print(resp.data)
 - "Place a GTT to buy Wipro when it falls to 440"
 - "How much cash do I have free?"
 - "Last price of Bank Nifty"
-- "Pull the Nifty option chain for this week" 
+- "Pull the Nifty option chain for this week"
 
 ---
 

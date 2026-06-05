@@ -21,6 +21,7 @@ Built to comply with the `SKILL.md` specification, providing compatibility with:
 - **Claude Code**
 - **Codex**
 - Any agent framework supporting the SKILL standard.
+
 ---
 
 ## Installation

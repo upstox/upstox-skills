@@ -79,7 +79,7 @@ resp = order_v3.place_order(body)
 ## Market Price Protection (MPP)
 
 MARKET orders never execute "at any price" on Upstox. Upstox **automatically**
-converts protected market orders into a limit order bounded by a buffer around
+converts protected market orders into limit orders bounded by a buffer around
 the prevailing price (roughly 0.5%–25% depending on the instrument), so a thin
 or fast-moving book can't fill you at a wild price. This applies automatically to
 market orders on stock options, commodity options, and multi-position square-offs

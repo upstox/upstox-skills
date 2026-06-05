@@ -24,7 +24,7 @@ back off before retrying.
 |------------|-------------|
 | `UDAPI10000` | This request is not supported by Upstox API — thrown when the API call is not recognized or valid, possibly due to incorrect URL formatting or unexpected characters in the URL. |
 | `UDAPI100016` | Invalid Credentials — thrown when one of the credentials passed to this API is invalid. |
-| `UDAPI10005` | Too Many Request Sent — thrown when you've exceeded the rate limits for the API. |
+| `UDAPI10005` | Too Many Requests Sent — thrown when you've exceeded the rate limits for the API. |
 | `UDAPI100015` | API Version does not exist — thrown when the API version isn't part of the header attributes. |
 | `UDAPI100050` | Invalid token used to access API — thrown when an invalid token is used to access the API. |
 | `UDAPI100067` | The API you are trying to access is not permitted with an extended_token — thrown when trying to access an API that is not allowed with an extended_token. |
@@ -40,7 +40,7 @@ their respective documentation.
 
 ## Handling Token Expiry
 
-Access tokens expire at end of each trading day. Detect and handle:
+Access tokens expire at the end of each trading day. Detect and handle:
 
 ```python
 def api_call_with_auth_retry(api_func, *args, **kwargs):
