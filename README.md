@@ -109,7 +109,7 @@ skills/upstox/
 > **Accuracy note:** every SDK class, method, request model, field, enum, and
 > instrument-file URL in this skill is verified against the
 > [official upstox-python SDK source](https://github.com/upstox/upstox-python).
-> The most important rule is the **v2 vs v3 split** — see `SKILL.md`.
+> The most important rule is the **v2 vs v3 split** — see [`SKILL.md`](skills/upstox/SKILL.md).
 
 ---
 
@@ -117,6 +117,7 @@ skills/upstox/
 
 | Safeguard | How it protects you |
 |------|-------------|
+| **Test before going live** | Encourages rehearsing order flows in the Upstox **sandbox** (`Configuration(sandbox=True)`) — place and verify test orders with no real money before any live trade |
 | **Always asks first** | Shows you a complete order summary and waits for your explicit `yes` before anything is placed |
 | **Plays it safe with pricing** | Places limit orders by default — it won't fire off a market order unless you specifically ask for one |
 | **Starts small** | Defaults to just 1 share (or 1 lot) when you don't say how many, so nothing is over-ordered by mistake |
@@ -163,7 +164,7 @@ skills/upstox/
 ## SDK Reference
 
 - **PyPI**: `upstox-python-sdk`
-- **Base URL**: `https://api.upstox.com/v2`
+- **Base URL**: `https://api.upstox.com/`
 - **API Docs**: https://upstox.com/developer/api-documentation/
 - **Sandbox**: https://upstox.com/developer/api-documentation/sandbox
 - **Community**: https://community.upstox.com/c/developer-api
