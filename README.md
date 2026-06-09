@@ -26,15 +26,34 @@ Built to comply with the `SKILL.md` specification, providing compatibility with:
 
 ## Installation
 
-### Global install
-```bash
-npm install -g skills
-skills add upstox/upstox-skills --skill upstox
+### Claude Code (recommended — native plugin)
+
+Install directly through Claude Code's plugin system. This drops the skill where
+Claude Code actually reads it (`~/.claude/skills/` via the plugin), with no manual
+symlinking:
+
+```text
+/plugin marketplace add upstox/upstox-skills
+/plugin install upstox@upstox-skills
 ```
 
-### Claude Code or Codex
+Then `/reload-plugins` (or restart the session) and the skill auto-loads.
+
+### Claude Code (via the `skills` CLI)
+
+If you prefer the [`skills`](https://github.com/vercel-labs/skills) CLI, **pin the
+agent with `-a claude-code`** — otherwise it falls back to `~/.agents/skills/`,
+which Claude Code does not read:
+
 ```bash
-npx skills add upstox/upstox-skills --skill upstox
+npx skills add upstox/upstox-skills -s upstox -a claude-code      # project → .claude/skills/
+npx skills add upstox/upstox-skills -s upstox -a claude-code -g   # personal → ~/.claude/skills/
+```
+
+### Other agents (Cursor, Codex, Copilot, …)
+
+```bash
+npx skills add upstox/upstox-skills -s upstox        # auto-detects installed agents
 ```
 
 > Replace `upstox/upstox-skills` with your fork's `owner/repo` until this is published.

@@ -1,0 +1,11 @@
+{
+  "name": "upstox",
+  "description": "Upstox agent skill for Indian markets (NSE, BSE, MCX) — built on the official upstox-python-sdk.",
+  "version": "0.1.0",
+  "author": {
+    "name": "Upstox",
+    "url": "https://github.com/upstox"
+  },
+  "homepage": "https://github.com/upstox/upstox-skills",
+  "license": "MIT"
+}

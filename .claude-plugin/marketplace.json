@@ -1,0 +1,17 @@
+{
+  "name": "upstox-skills",
+  "owner": {
+    "name": "Upstox",
+    "url": "https://github.com/upstox"
+  },
+  "plugins": [
+    {
+      "name": "upstox",
+      "source": "./",
+      "description": "Upstox agent skill for Indian markets (NSE, BSE, MCX) — execute trades, read portfolios, and stream live data via the official upstox-python-sdk.",
+      "homepage": "https://github.com/upstox/upstox-skills",
+      "license": "MIT",
+      "keywords": ["upstox", "trading", "nse", "bse", "mcx", "fno", "india"]
+    }
+  ]
+}
